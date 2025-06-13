@@ -403,6 +403,8 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     {
         if (cache.TryGetValue<List<PendingTransfer>>(userId, out var pendingTransfers) && pendingTransfers is not null)
         {
+            logger.LogDebug("Processing {PendingTransferCount} pending transfers for newly connected client {UserId}", pendingTransfers.Count, userId);
+            
             foreach (var transferGroup in pendingTransfers
                          .GroupBy(t => t.TransferId)
                          .OrderBy(g => g.Min(t => t.Timestamp)))
@@ -450,6 +452,8 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     private async Task ProcessTransferSegment(string transferId, string connectionId, 
         IEnumerable<PendingTransfer> transfers, bool completeAfter)
     {
+        logger.LogDebug("Processing segment of pending transfers for transfer {TransferId}", transferId);
+        
         var sessionId = Guid.NewGuid().ToString();
         var metadata = new TransferMetadata(transferId, sessionId);
         
@@ -517,6 +521,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
             (_, sessions) => 
             {
                 sessions.Remove(session);
+                logger.LogDebug("Cleanup transfer session {TransferId}", transferId);
                 return sessions;
             });
         
@@ -524,6 +529,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
             remainingSessions.Count == 0)
         {
             _activeTransfers.TryRemove(transferId, out _);
+            logger.LogDebug("Cleaning up active transfer {TransferId}", transferId);
         }
     }
 }
