@@ -403,6 +403,8 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     {
         if (cache.TryGetValue<List<PendingTransfer>>(userId, out var pendingTransfers) && pendingTransfers is not null)
         {
+            logger.LogDebug("Processing {PendingTransferCount} pending transfers for newly connected client {UserId}", pendingTransfers.Count, userId);
+            
             foreach (var transferGroup in pendingTransfers
                          .GroupBy(t => t.TransferId)
                          .OrderBy(g => g.Min(t => t.Timestamp)))
@@ -420,7 +422,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
                 foreach (var endIndex in completionIndices)
                 {
                     var segment = orderedTransfers.Skip(startIndex).Take(endIndex - startIndex);
-                    await ProcessTransferSegment(transferId, userId, connectionId, segment, true);
+                    await ProcessTransferSegment(transferId, connectionId, segment, true);
                     startIndex = endIndex + 1;
                 }
             }
@@ -433,7 +435,6 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     /// Processes a segment of pending transfers for a specific transfer ID.
     /// </summary>
     /// <param name="transferId">The transfer identifier.</param>
-    /// <param name="userId">The user identifier.</param>
     /// <param name="connectionId">The connection ID of the client.</param>
     /// <param name="transfers">The transfers to process.</param>
     /// <param name="completeAfter">Whether to mark the transfer as complete after processing.</param>
@@ -448,11 +449,13 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     /// </list>
     /// </para>
     /// </remarks>
-    private async Task ProcessTransferSegment(string transferId, string userId, string connectionId, 
+    private async Task ProcessTransferSegment(string transferId, string connectionId, 
         IEnumerable<PendingTransfer> transfers, bool completeAfter)
     {
+        logger.LogDebug("Processing segment of pending transfers for transfer {TransferId}", transferId);
+        
         var sessionId = Guid.NewGuid().ToString();
-        var metadata = new TransferMetadata(userId, sessionId);
+        var metadata = new TransferMetadata(transferId, sessionId);
         
         var session = CreateTransferSession(metadata);
             
@@ -466,7 +469,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
         
         try 
         {
-            await Clients.Client(connectionId).SendAsync("PrepareForTransfer", transferId, sessionId);
+            await Clients.Client(connectionId).SendAsync("PrepareForTransfer", metadata);
             
             foreach (var transfer in transfers)
             {
@@ -518,6 +521,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
             (_, sessions) => 
             {
                 sessions.Remove(session);
+                logger.LogDebug("Cleanup transfer session {TransferId}", transferId);
                 return sessions;
             });
         
@@ -525,6 +529,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
             remainingSessions.Count == 0)
         {
             _activeTransfers.TryRemove(transferId, out _);
+            logger.LogDebug("Cleaning up active transfer {TransferId}", transferId);
         }
     }
 }
