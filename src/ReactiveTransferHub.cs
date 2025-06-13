@@ -420,7 +420,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
                 foreach (var endIndex in completionIndices)
                 {
                     var segment = orderedTransfers.Skip(startIndex).Take(endIndex - startIndex);
-                    await ProcessTransferSegment(transferId, userId, connectionId, segment, true);
+                    await ProcessTransferSegment(transferId, connectionId, segment, true);
                     startIndex = endIndex + 1;
                 }
             }
@@ -433,7 +433,6 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     /// Processes a segment of pending transfers for a specific transfer ID.
     /// </summary>
     /// <param name="transferId">The transfer identifier.</param>
-    /// <param name="userId">The user identifier.</param>
     /// <param name="connectionId">The connection ID of the client.</param>
     /// <param name="transfers">The transfers to process.</param>
     /// <param name="completeAfter">Whether to mark the transfer as complete after processing.</param>
@@ -448,11 +447,11 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     /// </list>
     /// </para>
     /// </remarks>
-    private async Task ProcessTransferSegment(string transferId, string userId, string connectionId, 
+    private async Task ProcessTransferSegment(string transferId, string connectionId, 
         IEnumerable<PendingTransfer> transfers, bool completeAfter)
     {
         var sessionId = Guid.NewGuid().ToString();
-        var metadata = new TransferMetadata(userId, sessionId);
+        var metadata = new TransferMetadata(transferId, sessionId);
         
         var session = CreateTransferSession(metadata);
             
@@ -466,7 +465,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
         
         try 
         {
-            await Clients.Client(connectionId).SendAsync("PrepareForTransfer", transferId, sessionId);
+            await Clients.Client(connectionId).SendAsync("PrepareForTransfer", metadata);
             
             foreach (var transfer in transfers)
             {
