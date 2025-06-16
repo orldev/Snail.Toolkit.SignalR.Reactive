@@ -68,7 +68,21 @@ public class CacheService(IMemoryCache cache) : ICacheService
         return false;
     }
 
-
+    /// <summary>
+    /// Adds a new item or updates an existing one in the cache with a specified absolute expiration time.
+    /// </summary>
+    /// <typeparam name="T">The type of the item to be added or updated.</typeparam>
+    /// <param name="key">The cache key identifying the entry.</param>
+    /// <param name="addValueFactory">The factory method to create a value if the key doesn't exist.</param>
+    /// <param name="updateValueFactory">The factory method to update the value if the key exists.</param>
+    /// <param name="absoluteExpiration">The absolute expiration time span from now.</param>
+    /// <returns>The added or updated value from the cache.</returns>
+    /// <remarks>
+    /// This operation is atomic and thread-safe. The method will retry until it successfully adds or updates the value.
+    /// The cache entry will be automatically removed after the specified expiration time.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/>, <paramref name="addValueFactory"/>,
+    /// or <paramref name="updateValueFactory"/> is null.</exception>
     public T AddOrUpdate<T>(
         object key,
         Func<object, T> addValueFactory,
@@ -100,6 +114,22 @@ public class CacheService(IMemoryCache cache) : ICacheService
         }
     }
 
+    /// <summary>
+    /// Attempts to update an existing cached item if the current value matches the expected value.
+    /// </summary>
+    /// <typeparam name="T">The type of the item to update.</typeparam>
+    /// <param name="key">The cache key identifying the entry.</param>
+    /// <param name="oldValue">The expected current value of the cached item.</param>
+    /// <param name="newValue">The new value to set if the current value matches.</param>
+    /// <param name="absoluteExpiration">The absolute expiration time span from now.</param>
+    /// <returns>
+    /// <c>true</c> if the item was found and updated; otherwise, <c>false</c>.
+    /// </returns>
+    /// <remarks>
+    /// This operation is atomic and thread-safe, using a lock to ensure consistency during the check-and-update operation.
+    /// The cache entry will be automatically removed after the specified expiration time.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null.</exception>
     public bool TryUpdate<T>(object key, T oldValue, T newValue, TimeSpan absoluteExpiration)
     {
         lock (cache)
@@ -154,8 +184,21 @@ public class CacheService(IMemoryCache cache) : ICacheService
         cache.Remove(key);
     }
     
+    /// <summary>
+    /// Generates a unique cache key by combining the type name with the provided key.
+    /// </summary>
+    /// <typeparam name="T">The type of the cached item.</typeparam>
+    /// <param name="key">The base cache key.</param>
+    /// <returns>A string combining the type name and the provided key.</returns>
     private static string GetKey<T>(object key) => $"{GetTypeName<T>()}_{key}";
     
+    /// <summary>
+    /// Gets the formatted type name, including generic type parameters if applicable.
+    /// </summary>
+    /// <typeparam name="T">The type to get the name for.</typeparam>
+    /// <returns>
+    /// The simple type name for non-generic types, or a formatted name with type parameters for generic types.
+    /// </returns>
     private static string GetTypeName<T>()
     {
         var type = typeof(T);
