@@ -33,6 +33,16 @@ public interface ICacheService
     /// </returns>
     bool TryGetValue<T>(object key, [MaybeNullWhen(false)] out T? value);
 
+
+    T AddOrUpdate<T>(
+        object key,
+        Func<object, T> addValueFactory,
+        Func<object, T, T> updateValueFactory,
+        TimeSpan absoluteExpiration);
+
+    bool TryUpdate<T>(object key, T oldValue, T newValue, TimeSpan absoluteExpiration);
+    
+    
     /// <summary>
     /// Attempts to remove and return a cached item by its key.
     /// </summary>

@@ -68,6 +68,51 @@ public class CacheService(IMemoryCache cache) : ICacheService
         return false;
     }
 
+
+    public T AddOrUpdate<T>(
+        object key,
+        Func<object, T> addValueFactory,
+        Func<object, T, T> updateValueFactory,
+        TimeSpan absoluteExpiration)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(addValueFactory);
+        ArgumentNullException.ThrowIfNull(updateValueFactory);
+        
+        while (true)
+        {
+            if (TryGetValue<T>(key, out var existingValue))
+            {
+                var newValue = updateValueFactory(key, existingValue);
+                if (TryUpdate(key, existingValue, newValue, absoluteExpiration))
+                {
+                    return newValue;
+                }
+            }
+            else
+            {
+                var newValue = addValueFactory(key);
+                if (TryAdd(key, newValue, absoluteExpiration))
+                {
+                    return newValue;
+                }
+            }
+        }
+    }
+
+    public bool TryUpdate<T>(object key, T oldValue, T newValue, TimeSpan absoluteExpiration)
+    {
+        lock (cache)
+        {
+            if (TryGetValue<T>(key, out var currentValue) && EqualityComparer<T>.Default.Equals(currentValue, oldValue))
+            {
+                cache.Set(GetKey<T>(key), newValue, absoluteExpiration);
+                return true;
+            }
+            return false;
+        }
+    }
+    
     /// <summary>
     /// Attempts to remove and return a cached value by its key.
     /// </summary>
