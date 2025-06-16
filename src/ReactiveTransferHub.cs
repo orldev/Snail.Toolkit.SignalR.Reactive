@@ -260,7 +260,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
     /// This should be called by the receiver after processing all chunks.
     /// </para>
     /// </remarks>
-    public Task ReceiverCompleted(TransferMetadata metadata)
+    public async Task ReceiverCompleted(TransferMetadata metadata)
     {
         if (_activeTransfers.TryGetValue(metadata.TransferId, out var sessions))
         {
@@ -270,9 +270,13 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
                 CleanupSession(metadata.TransferId, session);
                 logger.LogDebug("Completed Receiver for {TransferId} (Session: {SessionId})", 
                     metadata.TransferId, metadata.SessionId);
+                
+                if (metadata.IsAck)
+                {
+                    await AcknowledgeReceipt(metadata);    
+                } 
             }
         }
-        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -337,6 +341,7 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
         }
         
         await ProcessPendingTransfers(transferId, connectionId);
+        await ProcessPendingConfirmations(transferId);
         
         logger.LogDebug("Connected {TransferId} {ConnectionId}", transferId, connectionId);
         await base.OnConnectedAsync();
@@ -378,6 +383,35 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
             onCompleted: () => { }
         );
         return new TransferSession(subject, subscription, metadata);
+    }
+    
+    private async Task AcknowledgeReceipt(TransferMetadata metadata) 
+    {
+        if (_activeConnections.TryGetValue(metadata.TransferId, out var connectionId) &&
+            !string.IsNullOrEmpty(connectionId))
+        {
+            await Clients.Client(connectionId).SendAsync("AcknowledgeReceipt", metadata);
+        
+            logger.LogDebug("Receipt acknowledged for transfer {TransferId} (Session: {SessionId})",
+                metadata.TransferId, metadata.SessionId);
+        }
+        else
+        {
+            if (_options.PendingTransferCacheDuration > 0)
+            {
+                cache.AddOrUpdate<List<TransferMetadata>>(metadata.TransferId,
+                    _ => [metadata],
+                    (_, transfers) => 
+                    {
+                        transfers.Add(metadata);
+                        return transfers;
+                    }, 
+                    TimeSpan.FromHours(_options.PendingTransferCacheDuration));
+                
+                logger.LogDebug("Buffering confirmation for offline transfer {TransferId} (Session: {SessionId})",
+                    metadata.TransferId, metadata.SessionId);
+            }
+        }
     }
     
     /// <summary>
@@ -486,6 +520,25 @@ public class ReactiveTransferHub(ILogger<ReactiveTransferHub> logger, ICacheServ
             logger.LogError(ex, "Error processing transfer batch {TransferId}", transferId);
             CleanupSession(transferId, session);
             throw;
+        }
+    }
+    
+    private async Task ProcessPendingConfirmations(string userId)
+    {
+        if (cache.TryGetValue<List<TransferMetadata>>(userId, out var pendingTransfers) && pendingTransfers is not null)
+        {
+            logger.LogDebug(
+                "Processing {Count} pending confirmations for reconnected user {UserId}",
+                pendingTransfers.Count, userId);
+
+            await foreach (var transferData in pendingTransfers.ToAsyncEnumerable())
+            {
+                await AcknowledgeReceipt(transferData);
+            }
+
+            cache.TryRemove<List<TransferMetadata>>(userId, out _);
+            
+            logger.LogDebug("Completed processing pending confirmations for user {UserId}", userId);
         }
     }
     
