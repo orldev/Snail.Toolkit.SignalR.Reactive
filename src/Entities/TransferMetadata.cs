@@ -6,9 +6,9 @@ namespace Toolkit.SignalR.Reactive.Entities;
 /// <param name="TransferId">The unique identifier for the transfer.</param>
 /// <param name="SessionId">The session identifier associated with the transfer.</param>
 /// <param name="Channel">The channel through which the transfer occurs. Defaults to "default".</param>
-/// <param name="IsPending">Indicates whether the transfer is pending completion. Defaults to true.</param>
+/// <param name="IsAck">Indicates whether the transfer is pending completion. Defaults to true.</param>
 public record TransferMetadata(
     string TransferId, 
     string SessionId,
     string Channel = "default", 
-    bool IsPending = true);
+    bool IsAck = true);
