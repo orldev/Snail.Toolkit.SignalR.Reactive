@@ -31,11 +31,13 @@ public class CacheService(IMemoryCache cache) : ICacheService
     {
         ArgumentNullException.ThrowIfNull(key);
         
-        if (cache.TryGetValue(key, out _))
+        var cacheKey = GetKey<T>(key);
+        
+        if (cache.TryGetValue(cacheKey, out _))
         {
             return false;
         }
-        cache.Set(key, value, absoluteExpiration);
+        cache.Set(cacheKey, value, absoluteExpiration);
         return true;
     }
 
@@ -56,7 +58,7 @@ public class CacheService(IMemoryCache cache) : ICacheService
     {
         ArgumentNullException.ThrowIfNull(key);
         
-        if (cache.TryGetValue(key, out var cachedValue) && cachedValue is T typedValue)
+        if (cache.TryGetValue(GetKey<T>(key), out var cachedValue) && cachedValue is T typedValue)
         {
             value = typedValue;
             return true;
@@ -85,7 +87,7 @@ public class CacheService(IMemoryCache cache) : ICacheService
         
         if (TryGetValue(key, out value))
         {
-            cache.Remove(key);
+            cache.Remove(GetKey<T>(key));
             return true;
         }
 
@@ -105,5 +107,19 @@ public class CacheService(IMemoryCache cache) : ICacheService
     {
         ArgumentNullException.ThrowIfNull(key);
         cache.Remove(key);
+    }
+    
+    private static string GetKey<T>(object key) => $"{GetTypeName<T>()}_{key}";
+    
+    private static string GetTypeName<T>()
+    {
+        var type = typeof(T);
+        if (!type.IsGenericType) return type.Name;
+    
+        var genericTypeName = type.GetGenericTypeDefinition().Name;
+        genericTypeName = genericTypeName[..genericTypeName.IndexOf('`')];
+    
+        var genericArgs = string.Join(",", type.GetGenericArguments().Select(t => t.Name));
+        return $"{genericTypeName}<{genericArgs}>";
     }
 }
