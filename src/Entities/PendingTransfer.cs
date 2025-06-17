@@ -4,11 +4,15 @@ namespace Toolkit.SignalR.Reactive.Entities;
 /// Represents a transfer that is currently in progress and awaiting completion.
 /// </summary>
 /// <param name="TransferId">The unique identifier for the transfer operation.</param>
+/// <param name="SessionId">The session identifier associated with the transfer.</param>
 /// <param name="Chunk">The binary data chunk associated with this transfer.</param>
+/// <param name="BufferSize">The size of the buffer used for the transfer.</param>
 /// <param name="IsComplete">Indicates whether this transfer has been marked as complete.</param>
 /// <param name="Timestamp">The date and time when this transfer was created or last updated.</param>
 public record PendingTransfer(
     string TransferId, 
-    byte[] Chunk, 
+    string SessionId,
+    byte[] Chunk,
+    int BufferSize,
     bool IsComplete, 
     DateTime Timestamp);

@@ -149,11 +149,12 @@ builder.Services.AddHubConnection(builder.HostEnvironment.BaseAddress);
 
 ```csharp
 // Send as byte array (auto-chunked)
-await _sender.SendAsync("client123", fileBytes, chunkSize: 16384, channel: "secure-channel");
+sender.SetChannel("secure-channel");
+await sender.SendAsync("client123", fileBytes, chunkSize: 16384);
 
 // Send as observable stream
 var fileStream = Observable.FromAsync(() => File.ReadAllBytesAsync("largefile.bin"));
-await _sender.SendAsync("client123", fileStream);
+await sender.SendAsync("client123", fileStream);
 ```
 
 ### 3. Receive Data

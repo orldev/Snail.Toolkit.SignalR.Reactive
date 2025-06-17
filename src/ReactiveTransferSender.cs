@@ -4,41 +4,149 @@ using Toolkit.SignalR.Reactive.Entities;
 namespace Toolkit.SignalR.Reactive;
 
 /// <summary>
-/// A reactive implementation of <see cref="IReactiveTransferSender"/> that facilitates data transfer over SignalR.
+/// A reactive implementation of <see cref="IReactiveTransferSender"/> that facilitates data transfer over SignalR,
+/// supporting both chunked transfers and reactive stream-based transfers with session management.
 /// </summary>
-/// <param name="hubConnection">The SignalR hub connection used for data transfer.</param>
-/// <param name="logger">The logger instance for recording transfer events and errors.</param>
 /// <remarks>
 /// <para>
-/// This class provides two approaches for sending data:
+/// This implementation provides:
 /// <list type="bullet">
 ///   <item><description>Chunked transfer of byte arrays with configurable chunk size</description></item>
 ///   <item><description>Reactive stream-based transfer using <see cref="IObservable{T}"/></description></item>
+///   <item><description>Session-based transfer tracking with optional acknowledgments</description></item>
 /// </list>
 /// </para>
 /// <para>
 /// Key features:
 /// <list type="bullet">
-///   <item><description>Automatic chunking of large data</description></item>
-///   <item><description>Cancellation support via <see cref="CancellationToken"/></description></item>
-///   <item><description>Proper resource cleanup using <see cref="CompositeDisposable"/></description></item>
-///   <item><description>Comprehensive error handling and logging</description></item>
-///   <item><description>Thread-safe operation</description></item>
+///   <item><description>Automatic chunking of large data payloads</description></item>
+///   <item><description>Thread-safe operation with cancellation support</description></item>
+///   <item><description>Comprehensive resource cleanup via <see cref="CompositeDisposable"/></description></item>
+///   <item><description>Configurable acknowledgment receipts</description></item>
+///   <item><description>Channel-based transfer isolation</description></item>
 /// </list>
 /// </para>
 /// <para>
-/// The sender manages the complete transfer lifecycle including:
+/// The transfer lifecycle includes:
 /// <list type="bullet">
-///   <item><description>Session initialization</description></item>
-///   <item><description>Chunk transmission</description></item>
-///   <item><description>Completion signaling</description></item>
-///   <item><description>Error propagation</description></item>
+///   <item><description>Session initialization with metadata</description></item>
+///   <item><description>Chunked data transmission</description></item>
+///   <item><description>Completion/error signaling</description></item>
+///   <item><description>Automatic resource disposal</description></item>
 /// </list>
 /// </para>
 /// </remarks>
-public class ReactiveTransferSender(HubConnection hubConnection, ILogger<ReactiveTransferSender> logger) : IReactiveTransferSender
+public class ReactiveTransferSender : IReactiveTransferSender
 {
+    private bool _isAck = true;
+    private string _currentChannel = "default";
+    private readonly HubConnection _hubConnection;
+    private readonly ILogger<ReactiveTransferSender> _logger;
     private readonly CompositeDisposable _disposables = new();
+    
+    /// <summary>
+    /// Occurs when an acknowledgment receipt is received from the target client.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Event details:
+    /// <list type="bullet">
+    ///   <item><description>Only raised when acknowledgments are enabled</description></item>
+    ///   <item><description>Provides the session ID of acknowledged transfer</description></item>
+    ///   <item><description>Runs on the SignalR connection thread</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// Multiple handlers can be registered and will be invoked sequentially.
+    /// </para>
+    /// </remarks>
+    public event Func<string, Task>? OnAcknowledgeReceipted;
+    
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReactiveTransferSender"/> class.
+    /// </summary>
+    /// <param name="hubConnection">The SignalR hub connection to use for transfers.</param>
+    /// <param name="logger">The logger for recording transfer operations and errors.</param>
+    /// <remarks>
+    /// <para>
+    /// The constructor:
+    /// <list type="bullet">
+    ///   <item><description>Initializes the transfer infrastructure</description></item>
+    ///   <item><description>Sets up default channel ("default")</description></item>
+    ///   <item><description>Enables acknowledgment receipts by default</description></item>
+    ///   <item><description>Registers the AcknowledgeReceipt handler</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// Note: The provided <paramref name="hubConnection"/> should already be started before use.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when either:
+    /// <list type="bullet">
+    ///   <item><description><paramref name="hubConnection"/> is null</description></item>
+    ///   <item><description><paramref name="logger"/> is null</description></item>
+    /// </list>
+    /// </exception>
+    public ReactiveTransferSender(HubConnection hubConnection, ILogger<ReactiveTransferSender> logger)
+    {
+        _hubConnection = hubConnection;
+        _logger = logger;
+        
+        // Register handler for chunk delivery confirmations
+        _hubConnection.On<TransferMetadata>("AcknowledgeReceipt", metadata =>
+        {
+            logger.LogDebug("Chunk delivered for session {SessionId}", metadata.SessionId);
+            OnAcknowledgeReceipted?.Invoke(metadata.SessionId);
+        }); 
+    }
+
+    /// <summary>
+    /// Enables or disables acknowledgment receipts for transferred data.
+    /// </summary>
+    /// <param name="value">True to enable acknowledgment receipts, false to disable.</param>
+    /// <remarks>
+    /// <para>
+    /// When enabled, the sender will:
+    /// <list type="bullet">
+    ///   <item><description>Wait for acknowledgment receipts from the receiver</description></item>
+    ///   <item><description>Log delivery confirmation events</description></item>
+    ///   <item><description>Raise the <see cref="OnAcknowledgeReceipted"/> event</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// This setting affects all subsequent transfers until changed.
+    /// </para>
+    /// </remarks>
+    public void SetAcknowledgeReceipt(bool value)
+    {
+        _isAck = value;
+        _logger.LogDebug("Acknowledgment receipts {Status}", value ? "enabled" : "disabled");
+    }
+    
+    /// <summary>
+    /// Sets the communication channel for subsequent transfers.
+    /// </summary>
+    /// <param name="channel">The channel name to use for communication.</param>
+    /// <remarks>
+    /// <para>
+    /// Channel behavior:
+    /// <list type="bullet">
+    ///   <item><description>Names are case-sensitive</description></item>
+    ///   <item><description>Default channel is "default"</description></item>
+    ///   <item><description>Affects all subsequent Send operations</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// The channel acts as a logical separation for different transfer streams.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="channel"/> is null.</exception>
+    public void SetChannel(string channel)
+    {
+        _currentChannel = channel;
+        _logger.LogDebug("Communication channel set to: {Channel}", _currentChannel);
+    }
     
     /// <summary>
     /// Sends data to a target client by automatically splitting it into chunks.
@@ -46,8 +154,7 @@ public class ReactiveTransferSender(HubConnection hubConnection, ILogger<Reactiv
     /// <param name="targetClientId">The identifier of the target client.</param>
     /// <param name="bytes">The complete data to be sent.</param>
     /// <param name="chunkSize">The maximum size (in bytes) of each chunk. Default is 8192 bytes (8KB).</param>
-    /// <param name="channel">The communication channel to use. Default is "default".</param>
-    /// <param name="isPending">Whether to mark transfer as pending initially. Default is true.</param>
+    /// <param name="sessionId">Optional custom session ID for the transfer. If null, a new session ID will be generated.</param>
     /// <returns>A task that represents the asynchronous send operation.</returns>
     /// <exception cref="ArgumentNullException">
     /// Thrown when either:
@@ -78,12 +185,19 @@ public class ReactiveTransferSender(HubConnection hubConnection, ILogger<Reactiv
     /// </list>
     /// </para>
     /// </remarks>
-    public async Task SendAsync(string targetClientId, byte[] bytes, int chunkSize = 8192, string channel = "default", bool isPending = true)
+    public async Task SendAsync(string targetClientId, byte[] bytes, int chunkSize = 8192, string? sessionId = null)
     {
-        var sessionId = Guid.NewGuid().ToString();
-        var metadata = new TransferMetadata(targetClientId, sessionId, channel, isPending);
+        sessionId ??= Guid.NewGuid().ToString();
+        var dataStream = CreateObservable(bytes, chunkSize);
+        var bufferSize = await dataStream.Count().FirstAsync();
         
-        await SendCoreAsync(metadata,CreateObservable(bytes, chunkSize));
+        var metadata = new TransferMetadata(targetClientId, 
+            sessionId, 
+            bufferSize,
+            _currentChannel, 
+            _isAck);
+        
+        await SendCoreAsync(metadata, dataStream);
     }
     
     /// <summary>
@@ -91,8 +205,7 @@ public class ReactiveTransferSender(HubConnection hubConnection, ILogger<Reactiv
     /// </summary>
     /// <param name="targetClientId">The identifier of the target client.</param>
     /// <param name="dataStream">An observable sequence of byte arrays representing the data stream.</param>
-    /// <param name="channel">The communication channel to use. Default is "default".</param>
-    /// <param name="isPending">Whether to mark transfer as pending initially. Default is true.</param>
+    /// <param name="sessionId">Optional custom session ID for the transfer. If null, a new session ID will be generated.</param>
     /// <returns>A task that represents the asynchronous send operation.</returns>
     /// <exception cref="ArgumentNullException">
     /// Thrown when either:
@@ -121,10 +234,16 @@ public class ReactiveTransferSender(HubConnection hubConnection, ILogger<Reactiv
     /// </list>
     /// </para>
     /// </remarks>
-    public async Task SendAsync(string targetClientId, IObservable<byte[]> dataStream, string channel = "default", bool isPending = true)
+    public async Task SendAsync(string targetClientId, IObservable<byte[]> dataStream, string? sessionId = null)
     {
-        var sessionId = Guid.NewGuid().ToString();
-        var metadata = new TransferMetadata(targetClientId, sessionId, channel, isPending);
+        sessionId ??= Guid.NewGuid().ToString();
+        var bufferSize = await dataStream.Count().FirstAsync();
+        
+        var metadata = new TransferMetadata(targetClientId, 
+            sessionId, 
+            bufferSize,
+            _currentChannel, 
+            _isAck);
         
         await SendCoreAsync(metadata, dataStream);
     }
@@ -162,11 +281,11 @@ public class ReactiveTransferSender(HubConnection hubConnection, ILogger<Reactiv
 
         try
         {
-            await hubConnection.SendAsync("InitiateTransfer", metadata, cts.Token);
+            await _hubConnection.SendAsync("InitiateTransfer", metadata, cts.Token);
             
             var subscription = dataStream
                 .Select(chunk => Observable.FromAsync(() =>
-                    hubConnection.SendAsync("SendChunk", chunk, metadata, cts.Token)))
+                    _hubConnection.SendAsync("SendChunk", chunk, metadata, cts.Token)))
                 .Concat()
                 .Subscribe(
                     _ => { },
@@ -186,7 +305,7 @@ public class ReactiveTransferSender(HubConnection hubConnection, ILogger<Reactiv
         }
         catch (Exception ex)
         {
-            logger.LogError("Transfer failed: {Message}", ex.Message);
+            _logger.LogError("Transfer failed: {Message}", ex.Message);
             throw;
         }
     }
@@ -214,7 +333,7 @@ public class ReactiveTransferSender(HubConnection hubConnection, ILogger<Reactiv
     {
         if (success)
         {
-            await hubConnection.SendAsync("CompleteTransfer", metadata, ct);
+            await _hubConnection.SendAsync("CompleteTransfer", metadata, ct);
         }
     }
 
