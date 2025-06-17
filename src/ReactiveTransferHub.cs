@@ -467,7 +467,8 @@ public class ReactiveTransferHub(
     {
         if (cache.TryGetValue<List<PendingTransfer>>(userId, out var pendingTransfers) && pendingTransfers is not null)
         {
-            logger.LogDebug("Processing {PendingTransferCount} pending transfers for newly connected client {UserId}", pendingTransfers.Count, userId);
+            logger.LogDebug("Processing {PendingTransferCount} pending transfers for newly connected client {UserId}", 
+                pendingTransfers.Count, userId);
             
             foreach (var transferGroup in pendingTransfers
                          .GroupBy(t => t.TransferId)
@@ -516,10 +517,8 @@ public class ReactiveTransferHub(
     private async Task ProcessTransferSegment(string transferId, string connectionId, 
         IEnumerable<PendingTransfer> transfers, bool completeAfter)
     {
-        logger.LogDebug("Processing segment of pending transfers for transfer {TransferId}", transferId);
-        
-        var sessionId = Guid.NewGuid().ToString();
-        var metadata = new TransferMetadata(transferId, sessionId);
+        logger.LogDebug("Processing segment of pending transfers for transfer {TransferId} (Session: {SessionId})", 
+            metadata.TransferId, metadata.SessionId);
         
         var session = CreateTransferSession(metadata);
             
@@ -547,8 +546,9 @@ public class ReactiveTransferHub(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error processing transfer batch {TransferId}", transferId);
-            CleanupSession(transferId, session);
+            logger.LogError(ex, "Error processing transfer batch {TransferId} (Session: {SessionId})", 
+                metadata.TransferId, metadata.SessionId);
+            CleanupSession(metadata.TransferId, session);
             throw;
         }
     }

@@ -100,7 +100,8 @@ public class ReactiveTransferReceiver : IReactiveTransferReceiver
         // Register handler to react when the server signals readiness for transfer
         _hubConnection.On<TransferMetadata>("PrepareForTransfer", metadata =>
         {
-            _logger.LogInformation("PrepareForTransfer received for ID: {TransferId}, SessionId: {SessionId}", metadata.TransferId, metadata.SessionId);
+            _logger.LogInformation("PrepareForTransfer received for ID: {TransferId}, SessionId: {SessionId}", 
+                metadata.TransferId, metadata.SessionId);
             StartAndSubscribeTransfer(metadata);
         });
     }
@@ -168,7 +169,8 @@ public class ReactiveTransferReceiver : IReactiveTransferReceiver
         var subscription = observable.Subscribe(
             chunk =>
             {
-                _logger.LogDebug("Received chunk of size {Length} for transfer {SessionId}", chunk.Length, metadata.SessionId);
+                _logger.LogDebug("Received chunk of size {Length} for transfer {SessionId}", 
+                    chunk.Length, metadata.SessionId);
                 
                 // Invoke user-defined per-chunk processing, if any
                 OnChunkReceived?.Invoke(metadata.TransferId, chunk);
@@ -186,7 +188,8 @@ public class ReactiveTransferReceiver : IReactiveTransferReceiver
             },
             () =>
             {
-                _logger.LogInformation("Transfer {SessionId} completed. Total size: {Length} bytes", metadata.SessionId, ms.Length);
+                _logger.LogInformation("Transfer {SessionId} completed. Total size: {Length} bytes", 
+                    metadata.SessionId, ms.Length);
                 
                 // Extract complete data safely
                 byte[] data;
