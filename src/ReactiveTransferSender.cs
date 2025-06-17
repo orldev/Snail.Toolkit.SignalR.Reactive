@@ -187,12 +187,17 @@ public class ReactiveTransferSender : IReactiveTransferSender
     /// </remarks>
     public async Task SendAsync(string targetClientId, byte[] bytes, int chunkSize = 8192, string? sessionId = null)
     {
+        sessionId ??= Guid.NewGuid().ToString();
+        var dataStream = CreateObservable(bytes, chunkSize);
+        var bufferSize = await dataStream.Count().FirstAsync();
+        
         var metadata = new TransferMetadata(targetClientId, 
-            sessionId ?? Guid.NewGuid().ToString(), 
+            sessionId, 
+            bufferSize,
             _currentChannel, 
             _isAck);
         
-        await SendCoreAsync(metadata,CreateObservable(bytes, chunkSize));
+        await SendCoreAsync(metadata, dataStream);
     }
     
     /// <summary>
@@ -231,8 +236,12 @@ public class ReactiveTransferSender : IReactiveTransferSender
     /// </remarks>
     public async Task SendAsync(string targetClientId, IObservable<byte[]> dataStream, string? sessionId = null)
     {
+        sessionId ??= Guid.NewGuid().ToString();
+        var bufferSize = await dataStream.Count().FirstAsync();
+        
         var metadata = new TransferMetadata(targetClientId, 
-            sessionId ?? Guid.NewGuid().ToString(), 
+            sessionId, 
+            bufferSize,
             _currentChannel, 
             _isAck);
         

@@ -198,8 +198,9 @@ public class ReactiveTransferHub(
         }
         else if (cache.TryGetValue<List<PendingTransfer>>(metadata.TransferId, out var pending))
         {
-            pending?.Add(new PendingTransfer(transferId, chunk, false, DateTime.UtcNow));
-            logger.LogDebug("Chunk stored as pending for {TargetClientId}", metadata.TransferId);
+            pending?.Add(new PendingTransfer(transferId, metadata.SessionId, chunk, metadata.BufferSize,false, DateTime.UtcNow));
+            logger.LogDebug("Chunk stored as pending for {TargetClientId} (Session: {SessionId})", 
+                metadata.TransferId, metadata.SessionId);
         }
         
         return Task.CompletedTask;
@@ -244,8 +245,9 @@ public class ReactiveTransferHub(
         }
         else if (cache.TryGetValue<List<PendingTransfer>>(metadata.TransferId, out var pending))
         {
-            pending?.Add(new PendingTransfer(transferId, [], true, DateTime.UtcNow));
-            logger.LogDebug("Transfer completion stored as pending for {TargetClientId}", metadata.TransferId);
+            pending?.Add(new PendingTransfer(transferId, metadata.SessionId, [], metadata.BufferSize, true, DateTime.UtcNow));
+            logger.LogDebug("Transfer completion stored as pending for {TargetClientId} (Session: {SessionId})", 
+                metadata.TransferId, metadata.SessionId);
         }
         
         return Task.CompletedTask;
@@ -379,7 +381,7 @@ public class ReactiveTransferHub(
     /// </remarks>
     private TransferSession CreateTransferSession(TransferMetadata metadata)
     {
-        var subject = new ReplaySubject<byte[]>(bufferSize: 5);
+        var subject = new ReplaySubject<byte[]>(bufferSize: metadata.BufferSize);
         IDisposable? subscription = null;
         subscription = subject.Subscribe(
             onNext: _ => { },
@@ -486,8 +488,10 @@ public class ReactiveTransferHub(
                 var startIndex = 0;
                 foreach (var endIndex in completionIndices)
                 {
+                    var transfer = orderedTransfers.ElementAt(startIndex);
+                    var metadata = new TransferMetadata(transferId, transfer.SessionId, transfer.BufferSize);
                     var segment = orderedTransfers.Skip(startIndex).Take(endIndex - startIndex);
-                    await ProcessTransferSegment(transferId, connectionId, segment, true);
+                    await ProcessTransferSegment(metadata, connectionId, segment, true);
                     startIndex = endIndex + 1;
                 }
             }
@@ -499,7 +503,7 @@ public class ReactiveTransferHub(
     /// <summary>
     /// Processes a segment of pending transfers for a specific transfer ID.
     /// </summary>
-    /// <param name="transferId">The transfer identifier.</param>
+    /// <param name="metadata">The transfer metadata containing transfer and session identifiers.</param>
     /// <param name="connectionId">The connection ID of the client.</param>
     /// <param name="transfers">The transfers to process.</param>
     /// <param name="completeAfter">Whether to mark the transfer as complete after processing.</param>
@@ -514,7 +518,7 @@ public class ReactiveTransferHub(
     /// </list>
     /// </para>
     /// </remarks>
-    private async Task ProcessTransferSegment(string transferId, string connectionId, 
+    private async Task ProcessTransferSegment(TransferMetadata metadata, string connectionId, 
         IEnumerable<PendingTransfer> transfers, bool completeAfter)
     {
         logger.LogDebug("Processing segment of pending transfers for transfer {TransferId} (Session: {SessionId})", 
@@ -522,7 +526,7 @@ public class ReactiveTransferHub(
         
         var session = CreateTransferSession(metadata);
             
-        _activeTransfers.AddOrUpdate(transferId,
+        _activeTransfers.AddOrUpdate(metadata.TransferId,
             _ => [session],
             (_, sessions) => 
             {
