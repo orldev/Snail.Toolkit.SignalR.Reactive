@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      The hub side of reactive SignalR transfers: the routing hub, the transfers it holds until their
+      recipients confirm, the store for offline recipients, the workers behind both, and their registration.
+    </Description>
+  </PropertyGroup>
+
+  <!--
+    SignalR, hosting, options, configuration and the memory cache all come from the ASP.NET Core shared
+    framework, which every host this hub runs in already has. The NuGet Microsoft.AspNetCore.SignalR.Core
+    is the ASP.NET Core 2 era copy of the same assembly, frozen at 1.2.x, and is not referenced anywhere.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Reactive\Reactive.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      The client side of reactive SignalR transfers: a sender and a receiver over a HubConnection, and
+      their registration. Runs wherever the SignalR client does — browser, iOS, Android, desktop.
+    </Description>
+  </PropertyGroup>
+
+  <!--
+    This package exists so that a client never references server-side SignalR. The single package it
+    replaces pulled Microsoft.AspNetCore.SignalR.Core 1.2.x — an ASP.NET Core 2 era assembly — into every
+    app, where it did nothing but make the Mono AOT compiler crash (exit 139) on iOS and Android.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+    <PackageReference Include="System.Reactive.Linq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Reactive\Reactive.csproj" />
+  </ItemGroup>
+
+</Project>

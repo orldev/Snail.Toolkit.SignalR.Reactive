@@ -1,0 +1,34 @@
+<Project>
+
+  <!--
+    Central package management. The client and the server of one protocol drifting apart — a client
+    built against SignalR 10.0.12 talking to a hub on 10.0.11 — is what this file makes structurally
+    impossible.
+    <para>
+    The server package has no runtime entry here: everything it uses comes with the ASP.NET Core shared
+    framework, which is versioned by the runtime the host runs on rather than by this file.
+    </para>
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Runtime">
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Common" Version="10.0.12" />
+    <PackageVersion Include="System.Reactive.Linq" Version="6.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="Snail.Toolkit.Authentication.JwtBearer" Version="1.1.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+
+</Project>

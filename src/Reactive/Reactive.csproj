@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      The wire contract of reactive SignalR transfers that a client and a hub both compile against:
+      the transfer metadata and protocol version, receipts, per-transfer options, the callbacks the hub
+      makes on a client, and the sender and receiver a client application is written against.
+      References neither the SignalR client nor the ASP.NET Core server.
+    </Description>
+  </PropertyGroup>
+
+  <!--
+    The one SignalR assembly the contract names: HubException is how the sender reports a transfer that
+    did not get through, so it is part of what IReactiveTransferSender promises. It is the assembly both
+    the client and the server already share, and the ASP.NET Core shared framework replaces it on a host.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" />
+  </ItemGroup>
+
+  <!--
+    The hub's method names stay out of the public surface. The client invokes them by nameof and the hub
+    implements them, so a rename on one side stops compiling on the other — but which calls the wire
+    carries is how the two packages talk, not something a consumer calls or implements. Public to internal
+    is a breaking change and internal to public is not, so the reversible direction is the one taken.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Snail.Toolkit.SignalR.Reactive.Client" />
+    <InternalsVisibleTo Include="Snail.Toolkit.SignalR.Reactive.Server" />
+  </ItemGroup>
+
+</Project>

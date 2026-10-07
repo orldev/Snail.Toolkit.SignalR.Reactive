@@ -1,0 +1,68 @@
+<Project>
+
+  <!--
+    Project folders are short (Reactive, Client, Server) so the solution stays readable in an IDE.
+    The names that reach the outside world are derived here instead: leaving AssemblyName and
+    RootNamespace to their defaults would ship Client.dll and Server.dll with root namespaces of Client
+    and Server, which collide with unrelated packages in a consumer's graph and are painful to diagnose.
+  -->
+  <PropertyGroup>
+    <Product>Snail.Toolkit.SignalR.Reactive</Product>
+    <PackageId Condition="'$(MSBuildProjectName)' == 'Reactive'">$(Product)</PackageId>
+    <PackageId Condition="'$(MSBuildProjectName)' == 'Reactive.Tests'">$(Product).Tests</PackageId>
+    <PackageId Condition="'$(PackageId)' == ''">$(Product).$(MSBuildProjectName)</PackageId>
+    <AssemblyName>$(PackageId)</AssemblyName>
+    <RootNamespace>$(PackageId)</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!--
+    One version for every package in the repository. The three packages are one wire protocol cut in
+    two along the network: a client and a hub of different versions are exactly the mismatch
+    TransferProtocol.Version exists to refuse, so there is no such thing as releasing one side alone.
+    The release workflow overrides this from the tag; 2.0.0 is the first version after 1.0.2 because
+    both protocol 2 and the split itself break every 1.x consumer.
+  -->
+  <PropertyGroup>
+    <Version>2.0.0</Version>
+    <Authors>Toolkit</Authors>
+    <Copyright>Toolkit, 2023</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/orldev/Snail.Toolkit.SignalR.Reactive</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/orldev/Snail.Toolkit.SignalR.Reactive</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+  <!--
+    What a consumer gets besides the DLL. The one place a consumer meets this library is a transfer that
+    failed inside it, and stepping into that failure is the difference between a report and a guess.
+    Symbols travel in a .snupkg beside the package, which is what nuget.org expects, and the SDK's own
+    SourceLink puts the repository into the pdb so a debugger fetches the exact file. No package reference
+    for SourceLink on purpose: the SDK has carried it since .NET 8.
+  -->
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <!--
+    Paths are made relative ONLY under a build server: locally the flag breaks the debugger's ability to
+    find sources on disk, which is a worse trade for a developer than a byte-for-byte reproducibility
+    they are not asking for.
+  -->
+  <PropertyGroup Condition="'$(ContinuousIntegrationBuild)' == '' AND ('$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true')">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>
